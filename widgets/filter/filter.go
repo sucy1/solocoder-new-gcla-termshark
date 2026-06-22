@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -66,6 +67,7 @@ type Widget struct {
 	edCancelFn           context.CancelFunc
 	edCtxLock            sync.Mutex
 	fields               fields.IPrefixCompleter // provides completions, given a prefix
+	extraCompletions     func() []string         // provides additional completion candidates (e.g. presets)
 	completionsList      *list.Widget            // the filter widget replaces the list walker when new completions are generated
 	completionsActivator *activatorWidget        // used to disable focus going to drop down
 	completions          []string                // the current set of completions, used when rendering
@@ -96,11 +98,12 @@ const (
 )
 
 type Options struct {
-	Completer      fields.IPrefixCompleter
-	MenuOpener     menu.IOpener
-	Position       Pos
-	Validator      IValidator
-	MaxCompletions int
+	Completer        fields.IPrefixCompleter
+	MenuOpener       menu.IOpener
+	Position         Pos
+	Validator        IValidator
+	MaxCompletions   int
+	ExtraCompletions func() []string
 }
 
 type stringNamer string
@@ -223,6 +226,7 @@ func New(name string, opt Options) *Widget {
 		intermediate:         intermediate,
 		empty:                empty,
 		fields:               opt.Completer,
+		extraCompletions:     opt.ExtraCompletions,
 		completionsList:      filterList,
 		completionsActivator: filterActivator,
 		completions:          []string{},
@@ -544,28 +548,44 @@ func (w *Widget) UpdateCompletions(app gowid.IApp) {
 	}(w.edCtx)
 }
 
+func (w *Widget) SetExtraCompletions(fn func() []string) {
+	w.extraCompletions = fn
+}
+
 func (w *Widget) processCompletions(completions []string, app gowid.IApp) {
-	max := w.opts.MaxCompletions
+	combinedMap := make(map[string]struct{})
 	for _, c := range completions {
-		max = gwutil.Max(max, len(c))
+		combinedMap[c] = struct{}{}
+	}
+	if w.extraCompletions != nil {
+		for _, c := range w.extraCompletions() {
+			combinedMap[c] = struct{}{}
+		}
+	}
+	combined := make([]string, 0, len(combinedMap))
+	for c := range combinedMap {
+		combined = append(combined, c)
+	}
+	sort.Strings(combined)
+
+	max := w.opts.MaxCompletions
+	if len(combined) > max {
+		combined = combined[:max]
 	}
 
-	menu2Widgets := newMenuWidgets(w.ed, completions)
-	w.completions = completions
+	for _, c := range combined {
+		if len(c) > max {
+			max = len(c)
+		}
+	}
+
+	menu2Widgets := newMenuWidgets(w.ed, combined)
+	w.completions = combined
 	app.Run(gowid.RunFunction(func(app gowid.IApp) {
 		w.completionsList.SetWalker(list.NewSimpleListWalker(menu2Widgets), app)
-		// whenever there's an update, take focus away from drop down. This means enter
-		// can be used to submit a new filter.
 		w.completionsActivator.active = false
 		w.dropDown.SetWidth(gowid.RenderWithUnits{U: max + 2}, app)
-		// This makes for a better experience. The menu is rendered as a box because an
-		// explicit height is set; this results in the overlay either rendering as the
-		// full-height box requested; or if there's not enough vertical room, a shorter
-		// box. Either way, the list will render in the space provided (and the frame),
-		// and scroll if necessary. This means the menu isn't cut off at the bottom of
-		// the screen. This assumes I'm not displaying the individual widgets in flow
-		// mode because then each might take more than one line
-		if len(w.completions) >= 0 { // account for the frame...
+		if len(w.completions) >= 0 {
 			w.dropDown.SetHeight(gowid.RenderWithUnits{U: len(w.completions) + 2}, app)
 		} else {
 			w.dropDown.SetHeight(fixed, app)
@@ -642,8 +662,9 @@ func (w *Widget) UserInput(ev interface{}, size gowid.IRenderSize, focus gowid.S
 	if evk, ok := ev.(*tcell.EventKey); ok {
 		if evk.Key() == tcell.KeyTAB {
 			if len(w.completions) > 0 && focus.Focus {
+				*w.temporarilyDisabled = false
 				w.completionsActivator.active = true
-				return w.wrapped.UserInput(ev, size, focus, app)
+				return true
 			}
 			return false
 		}

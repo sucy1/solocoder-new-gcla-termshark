@@ -7,6 +7,7 @@ package exportsessions
 import (
 	"bufio"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,20 +20,55 @@ import (
 )
 
 type SessionInfo struct {
-	StreamIndex int
-	Protocol    string
-	SrcIP       string
-	DstIP       string
-	SrcPort     string
-	DstPort     string
-	Packets     int
-	Data        string
+	StreamIndex int    `json:"stream_index"`
+	Protocol    string `json:"protocol"`
+	SrcIP       string `json:"src_ip"`
+	DstIP       string `json:"dst_ip"`
+	SrcPort     string `json:"src_port"`
+	DstPort     string `json:"dst_port"`
+	Packets     int    `json:"packets"`
+	Data        string `json:"data"`
 }
 
 type SessionExport struct {
-	Filename   string
-	ExportTime time.Time
-	Sessions   []SessionInfo
+	Filename   string        `json:"filename"`
+	ExportTime time.Time     `json:"export_time"`
+	Sessions   []SessionInfo `json:"sessions"`
+}
+
+func parseHexFollowOutput(text string) []byte {
+	var buf []byte
+	inData := false
+	scanner := bufio.NewScanner(strings.NewReader(text))
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Follow:") {
+			inData = true
+			continue
+		}
+		if !inData {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "===") {
+			inData = false
+			continue
+		}
+		if trimmed == "" {
+			continue
+		}
+		hexPart := trimmed
+		if idx := strings.Index(trimmed, "  "); idx > 0 {
+			hexPart = trimmed[:idx]
+		}
+		hexPart = strings.ReplaceAll(hexPart, " ", "")
+		decoded, err := hex.DecodeString(hexPart)
+		if err != nil {
+			continue
+		}
+		buf = append(buf, decoded...)
+	}
+	return buf
 }
 
 func ExportSessions(pcapFile string, tsharkBin string, outputFile string) error {
@@ -69,6 +105,7 @@ func ExportSessions(pcapFile string, tsharkBin string, outputFile string) error 
 	}
 
 	streamSet := make(map[int]streamKey)
+	packetCountMap := make(map[int]int)
 	uniqueIndices := make(map[int]bool)
 
 	scanner := bufio.NewScanner(stdout)
@@ -86,6 +123,7 @@ func ExportSessions(pcapFile string, tsharkBin string, outputFile string) error 
 			continue
 		}
 		uniqueIndices[idx] = true
+		packetCountMap[idx]++
 		if _, exists := streamSet[idx]; !exists {
 			streamSet[idx] = streamKey{
 				index:   idx,
@@ -113,53 +151,26 @@ func ExportSessions(pcapFile string, tsharkBin string, outputFile string) error 
 		followArgs := []string{
 			"-r", pcapFile,
 			"-q",
-			"-z", fmt.Sprintf("follow,tcp,raw,%d", idx),
+			"-z", fmt.Sprintf("follow,tcp,hex,%d", idx),
 		}
 
+		var stdoutBuf strings.Builder
 		followCmd := exec.Command(tsharkBin, followArgs...)
-		followStdout, err := followCmd.StdoutPipe()
-		if err != nil {
-			return fmt.Errorf("creating stdout pipe for follow command stream %d: %w", idx, err)
-		}
+		followCmd.Stdout = &stdoutBuf
+		followCmd.Stderr = os.Stderr
 
-		if err := followCmd.Start(); err != nil {
-			return fmt.Errorf("starting tshark follow command for stream %d: %w", idx, err)
-		}
-
-		var reassembledData strings.Builder
-		packetCount := 0
-		inData := false
-
-		followScanner := bufio.NewScanner(followStdout)
-		for followScanner.Scan() {
-			line := followScanner.Text()
-			if strings.Contains(line, "Follow:") {
-				inData = true
-				continue
-			}
-			if inData && strings.TrimSpace(line) == "" {
-				continue
-			}
-			if strings.HasPrefix(line, "===") {
-				if inData {
-					inData = false
-				}
-				continue
-			}
-			if inData {
-				trimmed := strings.TrimSpace(line)
-				if trimmed != "" {
-					reassembledData.WriteString(trimmed)
-					packetCount++
-				}
-			}
-		}
-
-		if err := followCmd.Wait(); err != nil {
+		if err := followCmd.Run(); err != nil {
 			return fmt.Errorf("tshark follow command failed for stream %d: %w", idx, err)
 		}
 
+		binaryData := parseHexFollowOutput(stdoutBuf.String())
+		b64Data := base64.StdEncoding.EncodeToString(binaryData)
+
 		key := streamSet[idx]
+		pktCount := packetCountMap[idx]
+		if pktCount == 0 {
+			pktCount = 1
+		}
 		sessions = append(sessions, SessionInfo{
 			StreamIndex: idx,
 			Protocol:    "TCP",
@@ -167,8 +178,8 @@ func ExportSessions(pcapFile string, tsharkBin string, outputFile string) error 
 			DstIP:       key.dstIP,
 			SrcPort:     key.srcPort,
 			DstPort:     key.dstPort,
-			Packets:     packetCount,
-			Data:        base64.StdEncoding.EncodeToString([]byte(reassembledData.String())),
+			Packets:     pktCount,
+			Data:        b64Data,
 		})
 	}
 

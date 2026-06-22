@@ -24,6 +24,17 @@ func InitPresetStore() {
 	PresetStore = presets.NewStore(dir)
 }
 
+func AttachPresetCompletions() {
+	if FilterWidget != nil {
+		FilterWidget.SetExtraCompletions(func() []string {
+			if PresetStore == nil {
+				return nil
+			}
+			return PresetStore.Names()
+		})
+	}
+}
+
 //======================================================================
 
 type presetCommand struct{}

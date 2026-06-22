@@ -890,6 +890,7 @@ func cmain() int {
 
 	ui.InitAnnotationStore()
 	ui.InitPresetStore()
+	ui.AttachPresetCompletions()
 
 	appRunner := app.Runner()
 

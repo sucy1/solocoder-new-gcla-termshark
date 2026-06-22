@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/gcla/termshark/v2/configs/profiles"
@@ -26,10 +28,33 @@ type PresetStore struct {
 	mu       sync.Mutex
 }
 
+var unsafeNamePattern = regexp.MustCompile(`[^\w\-.]`)
+
+func sanitizeName(name string) string {
+	name = strings.ReplaceAll(name, "..", "_")
+	name = unsafeNamePattern.ReplaceAllString(name, "_")
+	name = strings.ReplaceAll(name, "..", "_")
+	if strings.TrimSpace(name) == "" {
+		name = "default"
+	}
+	return name
+}
+
 func NewStore(profileDir string) *PresetStore {
-	name := profiles.CurrentName()
+	name := sanitizeName(profiles.CurrentName())
 	dir := filepath.Join(profileDir, name)
 	fp := filepath.Join(dir, ".termshark-presets.json")
+	absDir, err := filepath.Abs(filepath.Clean(dir))
+	if err == nil {
+		absBase, err := filepath.Abs(filepath.Clean(profileDir))
+		if err == nil {
+			rel, err := filepath.Rel(absBase, absDir)
+			if err != nil || strings.HasPrefix(rel, "..") {
+				dir = filepath.Join(profileDir, "default")
+				fp = filepath.Join(dir, ".termshark-presets.json")
+			}
+		}
+	}
 	s := &PresetStore{
 		presets:  make([]Preset, 0),
 		filePath: fp,
