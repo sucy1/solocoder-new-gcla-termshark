@@ -640,11 +640,18 @@ func (w *Widget) Render(size gowid.IRenderSize, focus gowid.Selector, app gowid.
 // it go orange briefly, which is unpleasant.
 func (w *Widget) UserInput(ev interface{}, size gowid.IRenderSize, focus gowid.Selector, app gowid.IApp) bool {
 	if evk, ok := ev.(*tcell.EventKey); ok {
-		if evk.Key() == tcell.KeyTAB || (vim.KeyIn(evk, vim.AllDownKeys) && !termshark.KeyPressIsPrintable(evk)) {
+		if evk.Key() == tcell.KeyTAB {
+			if len(w.completions) > 0 && focus.Focus {
+				w.completionsActivator.active = true
+				return w.wrapped.UserInput(ev, size, focus, app)
+			}
+			return false
+		}
+		if vim.KeyIn(evk, vim.AllDownKeys) && !termshark.KeyPressIsPrintable(evk) {
 			return false
 		}
 	}
-	*w.temporarilyDisabled = false // any input should start the appearance of the drop down again
+	*w.temporarilyDisabled = false
 	return w.wrapped.UserInput(ev, size, focus, app)
 }
 

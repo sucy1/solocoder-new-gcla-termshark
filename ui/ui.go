@@ -1506,6 +1506,11 @@ func lastLineMode(app gowid.IApp) {
 	MiniBuffer.Register("map", mapCommand{w: keyMapper})
 	MiniBuffer.Register("unmap", unmapCommand{w: keyMapper})
 	MiniBuffer.Register("help", helpCommand{})
+	MiniBuffer.Register("preset", presetCommand{})
+	MiniBuffer.Register("annotation", minibufferFn(func(app gowid.IApp, args ...string) error {
+		openAnnotationDialog(app)
+		return nil
+	}))
 
 	minibuffer.Open(MiniBuffer, mbView, ratio(1.0), app)
 }
@@ -2231,6 +2236,12 @@ func appKeyPress(evk *tcell.EventKey, app gowid.IApp) bool {
 		keyState.PartialgCmd = true
 	} else if evk.Key() == tcell.KeyCtrlW {
 		keyState.PartialCtrlWCmd = true
+	} else if isrune && evk.Rune() == 't' {
+		CycleTimeFormat(app)
+	} else if isrune && evk.Rune() == 'i' {
+		ToggleHexSearchCase(app)
+	} else if isrune && evk.Rune() == 'a' {
+		openAnnotationDialog(app)
 	} else if isrune && evk.Rune() >= '0' && evk.Rune() <= '9' {
 		if keyState.NumberPrefix == -1 {
 			keyState.NumberPrefix = int(evk.Rune() - '0')

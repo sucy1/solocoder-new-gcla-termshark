@@ -25,6 +25,7 @@ import (
 	"github.com/gcla/termshark/v2/pkg/cli"
 	"github.com/gcla/termshark/v2/pkg/confwatcher"
 	"github.com/gcla/termshark/v2/pkg/convs"
+	"github.com/gcla/termshark/v2/pkg/exportsessions"
 	"github.com/gcla/termshark/v2/pkg/fields"
 	"github.com/gcla/termshark/v2/pkg/pcap"
 	"github.com/gcla/termshark/v2/pkg/shark"
@@ -585,6 +586,20 @@ func cmain() int {
 		return 1
 	}
 
+	if opts.ExportSessions != "" {
+		pcapFile := pcapf
+		if pcapFile == "" {
+			fmt.Fprintf(os.Stderr, "Error: --export-sessions requires a pcap file (-r).\n")
+			return 1
+		}
+		err := exportsessions.ExportSessions(pcapFile, tsharkBin, string(opts.ExportSessions))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error exporting sessions: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
 	// Here, tsharkBin is a fully-qualified tshark binary that exists on the fs (absent race
 	// conditions...)
 
@@ -867,13 +882,14 @@ func cmain() int {
 
 	if app, err = ui.Build(usetty); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		// Tcell returns ExitError now because if its internal terminfo DB does not have
-		// a matching entry, it tries to build one with infocmp.
 		if _, ok := termshark.RootCause(err).(*exec.ExitError); ok {
 			fmt.Fprintf(os.Stderr, "Termshark could not recognize your terminal. Try changing $TERM.\n")
 		}
 		return 1
 	}
+
+	ui.InitAnnotationStore()
+	ui.InitPresetStore()
 
 	appRunner := app.Runner()
 
