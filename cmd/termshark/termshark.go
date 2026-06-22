@@ -888,8 +888,12 @@ func cmain() int {
 		return 1
 	}
 
-	ui.InitAnnotationStore()
-	ui.InitPresetStore()
+	if err := ui.InitAnnotationStore(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not initialize annotation store: %v\n", err)
+	}
+	if err := ui.InitPresetStore(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not initialize preset store: %v\n", err)
+	}
 	ui.AttachPresetCompletions()
 
 	appRunner := app.Runner()

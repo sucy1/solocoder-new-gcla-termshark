@@ -20,14 +20,15 @@ import (
 )
 
 type SessionInfo struct {
-	StreamIndex int    `json:"stream_index"`
-	Protocol    string `json:"protocol"`
-	SrcIP       string `json:"src_ip"`
-	DstIP       string `json:"dst_ip"`
-	SrcPort     string `json:"src_port"`
-	DstPort     string `json:"dst_port"`
-	Packets     int    `json:"packets"`
-	Data        string `json:"data"`
+	StreamIndex  int      `json:"stream_index"`
+	Protocol     string   `json:"protocol"`
+	SrcIP        string   `json:"src_ip"`
+	DstIP        string   `json:"dst_ip"`
+	SrcPort      string   `json:"src_port"`
+	DstPort      string   `json:"dst_port"`
+	Packets      int      `json:"packets"`
+	Data         string   `json:"data"`
+	DataEncoding string   `json:"data_encoding"`
 }
 
 type SessionExport struct {
@@ -172,14 +173,15 @@ func ExportSessions(pcapFile string, tsharkBin string, outputFile string) error 
 			pktCount = 1
 		}
 		sessions = append(sessions, SessionInfo{
-			StreamIndex: idx,
-			Protocol:    "TCP",
-			SrcIP:       key.srcIP,
-			DstIP:       key.dstIP,
-			SrcPort:     key.srcPort,
-			DstPort:     key.dstPort,
-			Packets:     pktCount,
-			Data:        b64Data,
+			StreamIndex:  idx,
+			Protocol:     "TCP",
+			SrcIP:        key.srcIP,
+			DstIP:        key.dstIP,
+			SrcPort:      key.srcPort,
+			DstPort:      key.dstPort,
+			Packets:      pktCount,
+			Data:         b64Data,
+			DataEncoding: "base64",
 		})
 	}
 

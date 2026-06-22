@@ -12,16 +12,19 @@ import (
 	"github.com/gcla/gowid"
 	"github.com/gcla/termshark/v2/pkg/presets"
 	"github.com/gcla/termshark/v2/widgets/minibuffer"
-	"github.com/shibukawa/configdir"
 )
 
 //======================================================================
 
 var PresetStore *presets.PresetStore
 
-func InitPresetStore() {
-	dir := configdir.New("", "termshark").QueryFolders(configdir.Global)[0].Path
-	PresetStore = presets.NewStore(dir)
+func InitPresetStore() error {
+	store, err := presets.NewStore()
+	if err != nil {
+		return err
+	}
+	PresetStore = store
+	return nil
 }
 
 func AttachPresetCompletions() {

@@ -16,7 +16,6 @@ import (
 	"github.com/gcla/gowid/widgets/pile"
 	"github.com/gcla/gowid/widgets/text"
 	"github.com/gcla/termshark/v2/pkg/annotations"
-	"github.com/shibukawa/configdir"
 )
 
 //======================================================================
@@ -25,9 +24,13 @@ var AnnotationStore *annotations.AnnotationStore
 
 //======================================================================
 
-func InitAnnotationStore() {
-	dir := configdir.New("", "termshark").QueryFolders(configdir.Global)[0].Path
-	AnnotationStore = annotations.NewStore(dir)
+func InitAnnotationStore() error {
+	store, err := annotations.NewStore()
+	if err != nil {
+		return err
+	}
+	AnnotationStore = store
+	return nil
 }
 
 //======================================================================

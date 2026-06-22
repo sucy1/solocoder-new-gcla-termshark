@@ -249,6 +249,14 @@ func CurrentName() string {
 	return currentName
 }
 
+func CurrentDir() (string, error) {
+	dir, err := profilesDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, CurrentName()), nil
+}
+
 func AllNames() []string {
 	res := AllNonDefaultNames()
 	return append(res, "default")

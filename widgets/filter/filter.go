@@ -406,9 +406,7 @@ func newMenuWidgets(ed *edit.Widget, completions []string) []gowid.IWidget {
 				gowid.RenderWithUnits{U: gwutil.Max(12, len(s))},
 			),
 			button.Options{
-				Decoration:         button.BareDecoration,
-				SelectKeysProvided: true,
-				SelectKeys:         []gowid.IKey{gowid.MakeKeyExt(tcell.KeyEnter)},
+				Decoration: button.BareDecoration,
 			},
 		)
 		clickmeStyled := styled.NewInvertedFocus(clickme, gowid.MakePaletteRef("filter-menu"))
